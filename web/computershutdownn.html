@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>슈퍼마리오 랜덤 맵</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: skyblue;
+    }
+
+    #game {
+      width: 800px;
+      height: 400px;
+      position: relative;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 2px solid #000;
+    }
+
+    .ground {
+      position: absolute;
+      bottom: 0;
+      height: 40px;
+      background-color: green;
+      width: 100%;
+    }
+
+    .block {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background-color: yellow;
+      border: 2px solid #aaa;
+    }
+
+    .mario {
+      position: absolute;
+      width: 30px;
+      height: 40px;
+      background-color: red;
+      bottom: 40px;
+      left: 100px;
+      z-index: 10;
+    }
+
+    .enemy {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background-color: brown;
+      bottom: 40px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 40px;
+      color: white;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px 40px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <div class="ground"></div>
+    <div class="mario" id="mario"></div>
+    <div id="gameOverText" class="game-over hidden">GAME OVER</div>
+  </div>
+
+  <script>
+    const game = document.getElementById('game');
+    const mario = document.getElementById('mario');
+    const gameOverText = document.getElementById('gameOverText');
+
+    let positionX = 100;
+    let positionY = 40;
+    let velocityY = 0;
+    let isJumping = false;
+    const gravity = 1;
+    const groundLevel = 40;
+    let isGameOver = false;
+
+    const BLOCK_COUNT = 5;
+    const ENEMY_COUNT = 3;
+
+    // 키보드 입력
+    document.addEventListener('keydown', (e) => {
+      if (isGameOver) return;
+
+      if (e.key === 'ArrowRight') {
+        positionX += 10;
+      } else if (e.key === 'ArrowLeft') {
+        positionX -= 10;
+      } else if ((e.key === ' ' || e.key === 'ArrowUp') && !isJumping) {
+        velocityY = 15;
+        isJumping = true;
+      }
+    });
+
+    function generateStage() {
+      // 기존 블록/적 제거
+      document.querySelectorAll('.block, .enemy').forEach(el => el.remove());
+
+      // 랜덤 블록 생성
+      for (let i = 0; i < BLOCK_COUNT; i++) {
+        const block = document.createElement('div');
+        block.classList.add('block');
+        const x = Math.floor(Math.random() * 700) + 50;
+        const y = Math.floor(Math.random() * 3) * 40 + 80; // 80, 120, 160
+        block.style.left = x + 'px';
+        block.style.bottom = y + 'px';
+        block.setAttribute('data-x', x);
+        block.setAttribute('data-y', y);
+        game.appendChild(block);
+      }
+
+      // 랜덤 적 생성
+      for (let i = 0; i < ENEMY_COUNT; i++) {
+        const enemy = document.createElement('div');
+        enemy.classList.add('enemy');
+        const x = Math.floor(Math.random() * 700) + 50;
+        enemy.style.left = x + 'px';
+        enemy.setAttribute('data-direction', Math.random() > 0.5 ? 'left' : 'right');
+        game.appendChild(enemy);
+      }
+    }
+
+    function checkPlatformCollision() {
+      const blocks = document.querySelectorAll('.block');
+
+      for (let block of blocks) {
+        const blockX = parseInt(block.getAttribute('data-x'));
+        const blockY = parseInt(block.getAttribute('data-y'));
+        const marioBottom = positionY;
+        const marioLeft = positionX;
+        const marioRight = positionX + 30;
+
+        const isAbove = marioBottom <= blockY + 40 && marioBottom >= blockY + 35;
+        const isWithinX = marioRight > blockX && marioLeft < blockX + 40;
+
+        if (isAbove && isWithinX) {
+          positionY = blockY + 40;
+          velocityY = 0;
+          isJumping = false;
+          return;
+        }
+      }
+    }
+
+    function moveEnemies() {
+      const enemies = document.querySelectorAll('.enemy');
+      enemies.forEach(enemy => {
+        if (enemy.classList.contains('hidden')) return;
+
+        let x = parseInt(enemy.style.left);
+        let direction = enemy.getAttribute('data-direction');
+
+        if (direction === 'left') {
+          x -= 2;
+          if (x < 20) direction = 'right';
+        } else {
+          x += 2;
+          if (x > 750) direction = 'left';
+        }
+
+        enemy.style.left = x + 'px';
+        enemy.setAttribute('data-direction', direction);
+      });
+    }
+
+    function checkEnemyCollision() {
+      const enemies = document.querySelectorAll('.enemy');
+      enemies.forEach(enemy => {
+        if (enemy.classList.contains('hidden')) return;
+
+        const enemyX = parseInt(enemy.style.left);
+        const enemyY = 40;
+        const marioTop = positionY + 40;
+        const marioBottom = positionY;
+        const marioLeft = positionX;
+        const marioRight = positionX + 30;
+
+        const enemyLeft = enemyX;
+        const enemyRight = enemyX + 30;
+
+        const isHorizontallyOverlapping = marioRight > enemyLeft && marioLeft < enemyRight;
+        const isVerticallyTouching = marioBottom <= enemyY + 30 && marioTop >= enemyY;
+
+        if (isHorizontallyOverlapping && isVerticallyTouching) {
+          const isStomping = velocityY < 0 && marioBottom >= enemyY + 25;
+
+          if (isStomping) {
+            enemy.classList.add('hidden');
+            velocityY = 10;
+            isJumping = true;
+          } else {
+            triggerGameOver();
+          }
+        }
+      });
+    }
+
+    function triggerGameOver() {
+      isGameOver = true;
+      gameOverText.classList.remove('hidden');
+    }
+
+    function checkStageReset() {
+      if (positionX > 770) {
+        positionX = 0;
+        generateStage();
+      }
+    }
+
+    function gameLoop() {
+      if (isGameOver) return;
+
+      velocityY -= gravity;
+      positionY += velocityY;
+
+      if (positionY < groundLevel) {
+        positionY = groundLevel;
+        velocityY = 0;
+        isJumping = false;
+      }
+
+      checkPlatformCollision();
+      checkEnemyCollision();
+      checkStageReset();
+
+      mario.style.left = positionX + 'px';
+      mario.style.bottom = positionY + 'px';
+
+      moveEnemies();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    generateStage(); // 초기 스테이지 생성
+    gameLoop(); // 게임 시작
+  </script>
+</body>
+</html>
